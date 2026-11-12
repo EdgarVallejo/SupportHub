@@ -15,11 +15,23 @@ en espanol que explican responsabilidad, reglas y decisiones.
 - Evidencia: `docs/evidence/I-00-01.md` e informes Surefire locales.
 - Limite: no implementa permisos, persistencia, API, aprobacion ni procesamiento IA.
 
+## I-00-02: decisiones de arquitectura
+
+- Estado: completada; resultados en `docs/evidence/I-00-02.md`.
+- Requisitos: secciones 6, 8, 9, 11, 12, 13 y 17; trazabilidad detallada por ADR.
+- Archivos: indice y seis ADR en `docs/adr/`; evidencia en `docs/evidence/I-00-02.md`;
+  validador comentado `scripts/validation/Test-ArchitectureDocs.ps1`.
+- Comportamiento observable: responsabilidades, consistencia, RAG y aprobacion
+  quedan documentados; los pendientes de identidad y proveedor real son explicitos.
+- Validacion: seis ADR presentes, secciones obligatorias completas, enlaces locales
+  validos, revision semantica contra invariantes y regresion `mvn -B verify`.
+- Dependencia: I-00-01 completada.
+- Limite: documentacion de diseno; no implementa los controles descritos.
+
 ## Siguientes tareas
 
 | ID | Alcance y archivos previstos | Comportamiento / comprobacion | Dependencia |
 |---|---|---|---|
-| I-00-02 | ADR minimos en `docs/adr/` | Decisiones trazables y revision contra invariantes | I-00-01 |
 | I-00-03 | REST en `contracts/openapi.yaml` | Contrato completo; validacion OpenAPI | I-00-02 |
 | I-00-04 | Schemas y ejemplos en `contracts/events/` | Ejemplos validos aceptados e invalidos rechazados | I-00-03 |
 | I-00-05 | Bootstrap Spring de los dos servicios | Arranque y health comprobados; versiones registradas | I-00-04 |

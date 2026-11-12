@@ -9,6 +9,8 @@ antes de publicarlas en el historial interno del ticket.
 I-00 esta en progreso. La tarea I-00-01 incorpora la base Maven de los dos servicios
 y el contrato de transiciones de estados, con pruebas unitarias JUnit.
 Los servicios aun no tienen API ni procesamiento IA; falta configurar la infraestructura.
+I-00-02 documenta las seis [decisiones de arquitectura](docs/adr/README.md),
+incluidos los controles por implementar y las decisiones pendientes.
 
 La especificacion del proyecto esta en [docs/specs/supporthub.md](docs/specs/supporthub.md).
 
