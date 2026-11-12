@@ -1,6 +1,6 @@
 # Matriz de versiones
 
-Validacion parcial de I-00-01 el 11 de noviembre de 2026, Windows 11 x64.
+Validacion parcial hasta I-00-03 el 11 de noviembre de 2026, Windows 11 x64.
 Esta matriz se ampliara al incorporar Spring Boot e infraestructura; no demuestra
 todavia compatibilidad de todo el stack.
 
@@ -13,6 +13,7 @@ todavia compatibilidad de todo el stack.
 | Maven Surefire Plugin | 3.5.4 | Ejecucion de JUnit Platform |
 | Maven Resources Plugin | 3.4.0 | Fases de recursos del reactor |
 | Maven JAR Plugin | 3.5.0 | Empaquetado de ambos modulos |
+| Swagger Parser v3 (solo pruebas) | 2.1.27 | OpenAPI valido y referencia rota detectada; 25 casos contractuales |
 
 Referencias oficiales de las versiones elegidas:
 

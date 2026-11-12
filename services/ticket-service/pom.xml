@@ -13,6 +13,13 @@
     </parent>
     <artifactId>ticket-service</artifactId>
     <dependencies>
+        <!-- Valida OpenAPI solo durante pruebas; no agrega Swagger al servicio productivo. -->
+        <dependency>
+            <groupId>io.swagger.parser.v3</groupId>
+            <artifactId>swagger-parser-v3</artifactId>
+            <version>2.1.27</version>
+            <scope>test</scope>
+        </dependency>
         <!-- Solo se incorpora al entorno de pruebas, no al artefacto productivo. -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -20,4 +27,14 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <build>
+        <!-- Copia el contrato real al classpath de pruebas para evitar rutas dependientes del cwd. -->
+        <testResources>
+            <testResource>
+                <directory>../../contracts</directory>
+                <targetPath>contracts</targetPath>
+                <includes><include>openapi.yaml</include></includes>
+            </testResource>
+        </testResources>
+    </build>
 </project>

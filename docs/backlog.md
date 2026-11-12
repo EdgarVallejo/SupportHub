@@ -28,11 +28,22 @@ en espanol que explican responsabilidad, reglas y decisiones.
 - Dependencia: I-00-01 completada.
 - Limite: documentacion de diseno; no implementa los controles descritos.
 
+## I-00-03: contrato REST OpenAPI
+
+- Estado: completada; resultados en `docs/evidence/I-00-03.md`.
+- Requisitos: seccion 7; prepara RF-01 a RF-04, RF-09 a RF-11, RF-13 y RF-14.
+- Archivos: `contracts/openapi.yaml`, `contracts/README.md`, POM de tickets,
+  `OpenApiContractTest.java` y evidencia.
+- Comportamiento observable: once operaciones con esquemas, errores, restricciones
+  y requisitos de identidad declarados; convenciones adicionales documentadas.
+- Pruebas: parser OpenAPI y 25 casos contractuales; regresion de 30 casos de estados.
+- Dependencia: I-00-02 completada.
+- Limite: contrato de diseno; no implementa endpoints ni controles de seguridad.
+
 ## Siguientes tareas
 
 | ID | Alcance y archivos previstos | Comportamiento / comprobacion | Dependencia |
 |---|---|---|---|
-| I-00-03 | REST en `contracts/openapi.yaml` | Contrato completo; validacion OpenAPI | I-00-02 |
 | I-00-04 | Schemas y ejemplos en `contracts/events/` | Ejemplos validos aceptados e invalidos rechazados | I-00-03 |
 | I-00-05 | Bootstrap Spring de los dos servicios | Arranque y health comprobados; versiones registradas | I-00-04 |
 | I-00-06 | `infra/compose.yaml`, `.env.example` | Infraestructura inicia; health checks y smoke tests | I-00-05 |

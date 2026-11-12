@@ -1,0 +1,1111 @@
+# Contrato REST de I-00-03: rutas, esquemas, errores y autenticacion prevista.
+# Las descripciones explican reglas de negocio; este archivo no implementa endpoints.
+openapi: "3.0.3"
+info:
+  title: "SupportHub REST API"
+  version: "1.0.0"
+  description: "Contrato de diseno del MVP; los endpoints aun no estan implementados. JSON UTF-8, UUID y fechas UTC ISO-8601. Normalizar espacios sin alterar significado y rechazar HTML ejecutable. Cuerpo maximo de 32768 bytes antes de procesar; 400 si se excede. La longitud de cada campo no sustituye el limite de bytes. Requiere autenticacion en todas las operaciones; x-roles y x-human-identity-required documentan controles que la API debera implementar."
+servers:
+  -
+    url: "http://localhost:8080/api/v1"
+    description: "Entorno local previsto; fuera de localhost se exige TLS."
+tags:
+  -
+    name: "Tickets"
+    description: "Estado, consultas y decisiones de tickets."
+  -
+    name: "Knowledge"
+    description: "Lectura de versiones inmutables del corpus."
+security:
+  -
+    bearerAuth: []
+x-max-body-bytes: 32768
+paths:
+  "/tickets":
+    post:
+      operationId: "createTicket"
+      summary: "Crear ticket"
+      description: "Persiste ticket, historial y outbox atomicamente. Devuelve PENDING_AI/QUEUED y revision/version 1. IA o Kafka caidos no causan 503 si la transaccion PostgreSQL confirma. Admite Idempotency-Key."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters:
+        -
+          $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: "Crear ticket"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/TicketSnapshot"
+              example:
+                ticketId: "bfe01b3a-f688-4c24-9907-4adbbf418a41"
+                status: "PENDING_AI"
+                aiStatus: "QUEUED"
+                contentRevision: 1
+                version: 1
+          headers:
+            Location:
+              description: "Ruta de consulta del ticket creado."
+              schema:
+                type: "string"
+                example: "/api/v1/tickets/bfe01b3a-f688-4c24-9907-4adbbf418a41"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/CreateTicketRequest"
+            example:
+              title: "No puedo iniciar sesion"
+              description: "Despues de cinco intentos mi cuenta quedo bloqueada."
+    get:
+      operationId: "listTickets"
+      summary: "Listar tickets"
+      description: "Orden estable ascendente por createdAt y ticketId. Filtros combinables; fechas UTC."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters:
+        -
+          $ref: "#/components/parameters/Page"
+        -
+          $ref: "#/components/parameters/Size"
+        -
+          name: "status"
+          in: "query"
+          schema:
+            $ref: "#/components/schemas/TicketStatus"
+        -
+          name: "category"
+          in: "query"
+          schema:
+            $ref: "#/components/schemas/Category"
+        -
+          name: "createdFrom"
+          in: "query"
+          schema:
+            type: "string"
+            format: "date-time"
+            description: "Fecha UTC ISO-8601, terminada en Z."
+          description: "Limite inclusivo de createdAt. createdFrom posterior a createdTo devuelve 400."
+        -
+          name: "createdTo"
+          in: "query"
+          schema:
+            type: "string"
+            format: "date-time"
+            description: "Fecha UTC ISO-8601, terminada en Z."
+          description: "Limite inclusivo de createdAt. createdFrom posterior a createdTo devuelve 400."
+      responses:
+        "200":
+          description: "Listar tickets"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/TicketPage"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+  "/tickets/{id}":
+    parameters:
+      -
+        $ref: "#/components/parameters/TicketId"
+    get:
+      operationId: "getTicket"
+      summary: "Consultar ticket y respuestas publicadas"
+      description: "Consultar ticket y respuestas publicadas"
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters: []
+      responses:
+        "200":
+          description: "Consultar ticket y respuestas publicadas"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+    patch:
+      operationId: "updateTicket"
+      summary: "Editar contenido con control de version"
+      description: "expectedVersion controla concurrencia del agregado. Si cambia el contenido aumenta contentRevision e invalida propuesta pendiente. Un conflicto o ticket cerrado devuelve 409; respuestas anteriores permanecen."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters: []
+      responses:
+        "200":
+          description: "Editar contenido con control de version"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Ticket"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/UpdateTicketRequest"
+  "/tickets/{id}/history":
+    parameters:
+      -
+        $ref: "#/components/parameters/TicketId"
+    get:
+      operationId: "getTicketHistory"
+      summary: "Consultar historial cronologico"
+      description: "Orden ascendente por secuencia del ticket; paginacion estable."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters:
+        -
+          $ref: "#/components/parameters/Page"
+        -
+          $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: "Consultar historial cronologico"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/HistoryPage"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+  "/tickets/{id}/proposals":
+    parameters:
+      -
+        $ref: "#/components/parameters/TicketId"
+    get:
+      operationId: "getTicketProposals"
+      summary: "Consultar propuestas y referencias"
+      description: "Incluye propuestas anteriores, inmutables y sus referencias. Orden ascendente por createdAt y proposalId."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters:
+        -
+          $ref: "#/components/parameters/Page"
+        -
+          $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: "Consultar propuestas y referencias"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/ProposalPage"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+  "/tickets/{id}/ai-retries":
+    parameters:
+      -
+        $ref: "#/components/parameters/TicketId"
+    post:
+      operationId: "retryTicketAnalysis"
+      summary: "Solicitar reintento manual"
+      description: "Operacion de operador/administrador. Inicia nuevo analysisId y conserva el mismo ticket. Conflicto de version o estado incompatible devuelve 409; no reabre tickets cerrados."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters: []
+      responses:
+        "202":
+          description: "Solicitar reintento manual"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/TicketSnapshot"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/VersionRequest"
+  "/tickets/{id}/decisions":
+    parameters:
+      -
+        $ref: "#/components/parameters/TicketId"
+    post:
+      operationId: "decideProposal"
+      summary: "Aprobar o rechazar una propuesta vigente"
+      description: "Exige identidad humana verificable con rol OPERATOR, directa o transmitida por workflow autenticado; la credencial de n8n no basta. El actor nunca se acepta como campo libre approvedBy. El mecanismo concreto de identidad se fijara antes de habilitar I-05. Valida revision, intento, hash, expiracion y expectedVersion. APPROVE publica atomicamente una respuesta y deja RESOLVED; REJECT deja MANUAL_REVIEW sin publicacion. Propuesta vencida/obsoleta o mismo decisionId con otro contenido: 409. Replay identico: resultado persistido, sin nueva publicacion. Vigencia inicial: 24 horas."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "WORKFLOW_SERVICE"
+      parameters: []
+      responses:
+        "200":
+          description: "Aprobar o rechazar una propuesta vigente"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/DecisionResult"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/DecisionRequest"
+            example:
+              decisionId: "23c2b6c5-8c54-4653-87c9-63b302c976d7"
+              proposalId: "8233ee38-c364-4895-9363-5bdabf55e0e5"
+              proposalHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              expectedVersion: 3
+              decision: "APPROVE"
+              reason: "Respuesta verificada contra KB-002"
+      x-human-identity-required: true
+  "/tickets/{id}/close":
+    parameters:
+      -
+        $ref: "#/components/parameters/TicketId"
+    post:
+      operationId: "closeTicket"
+      summary: "Cerrar ticket con motivo"
+      description: "Solo operador o administrador con permiso de operador. Conserva historial. Motivo y expectedVersion obligatorios; conflictos de version o estado devuelven 409."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters: []
+      responses:
+        "200":
+          description: "Cerrar ticket con motivo"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/TicketSnapshot"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonVersionRequest"
+  "/tickets/{id}/reopen":
+    parameters:
+      -
+        $ref: "#/components/parameters/TicketId"
+    post:
+      operationId: "reopenTicket"
+      summary: "Reabrir ticket cerrado"
+      description: "Solo operador o administrador con permiso de operador. Exige CLOSED, motivo y expectedVersion; crea nueva revision de contenido y vuelve a PENDING_AI. Conserva respuestas anteriores."
+      tags:
+        - "Tickets"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters: []
+      responses:
+        "202":
+          description: "Reabrir ticket cerrado"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/TicketSnapshot"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "409":
+          $ref: "#/components/responses/Error409"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/ReasonVersionRequest"
+  "/knowledge/documents/{id}/versions/{version}":
+    parameters:
+      -
+        name: "id"
+        in: "path"
+        required: true
+        schema:
+          type: "string"
+          pattern: "^KB-[0-9]{3}$"
+      -
+        name: "version"
+        in: "path"
+        required: true
+        schema:
+          type: "integer"
+          minimum: 1
+    get:
+      operationId: "getKnowledgeDocument"
+      summary: "Consultar evidencia inmutable citada"
+      description: "Lectura por operador mediante la API de tickets; la propiedad del corpus permanece en IA. Documento o version inexistente: 404."
+      tags:
+        - "Knowledge"
+      x-roles:
+        - "OPERATOR"
+        - "ADMIN"
+      parameters: []
+      responses:
+        "200":
+          description: "Consultar evidencia inmutable citada"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/KnowledgeDocument"
+        "400":
+          $ref: "#/components/responses/Error400"
+        "401":
+          $ref: "#/components/responses/Error401"
+        "403":
+          $ref: "#/components/responses/Error403"
+        "404":
+          $ref: "#/components/responses/Error404"
+        "429":
+          $ref: "#/components/responses/Error429"
+        "503":
+          $ref: "#/components/responses/Error503"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: "http"
+      scheme: "bearer"
+      description: "Identidad local firmada o credencial de servicio separada. El mecanismo final de autenticacion y asercion humana se define antes de I-05; un bearer de workflow no basta para aprobar."
+  parameters:
+    TicketId:
+      name: "id"
+      in: "path"
+      required: true
+      schema:
+        type: "string"
+        format: "uuid"
+    Page:
+      name: "page"
+      in: "query"
+      description: "Indice de pagina basado en cero."
+      schema:
+        type: "integer"
+        minimum: 0
+        default: 0
+    Size:
+      name: "size"
+      in: "query"
+      schema:
+        type: "integer"
+        minimum: 1
+        maximum: 100
+        default: 20
+    IdempotencyKey:
+      name: "Idempotency-Key"
+      in: "header"
+      required: false
+      description: "Vigencia 24 horas por identidad. Misma clave y hash del cuerpo devuelve el mismo ticket y respuesta 201; cuerpo diferente devuelve 409."
+      schema:
+        type: "string"
+        minLength: 1
+  responses:
+    Error400:
+      description: "Entrada invalida, fechas invertidas o cuerpo superior a 32 KiB."
+      content:
+        "application/problem+json":
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Error401:
+      description: "Identidad ausente o no verificable."
+      content:
+        "application/problem+json":
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Error403:
+      description: "Permisos insuficientes o identidad humana no acreditada."
+      content:
+        "application/problem+json":
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Error404:
+      description: "Recurso inexistente."
+      content:
+        "application/problem+json":
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Error409:
+      description: "Version, idempotencia, propuesta o decision en conflicto."
+      content:
+        "application/problem+json":
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Error429:
+      description: "Limite de solicitudes excedido."
+      content:
+        "application/problem+json":
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Error503:
+      description: "No se puede persistir o consultar la operacion."
+      content:
+        "application/problem+json":
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    TicketStatus:
+      type: "string"
+      enum:
+        - "PENDING_AI"
+        - "AWAITING_APPROVAL"
+        - "MANUAL_REVIEW"
+        - "RESOLVED"
+        - "CLOSED"
+    AiStatus:
+      type: "string"
+      enum:
+        - "QUEUED"
+        - "RUNNING"
+        - "RETRY_WAIT"
+        - "SUCCEEDED"
+        - "EXHAUSTED"
+    Category:
+      type: "string"
+      enum:
+        - "ACCESS"
+        - "ORDERS"
+        - "APPLICATION"
+        - "OTHER"
+    Priority:
+      type: "string"
+      enum:
+        - "LOW"
+        - "NORMAL"
+        - "HIGH"
+    Action:
+      type: "string"
+      enum:
+        - "PUBLISH_REPLY"
+        - "NONE"
+    ProposalHash:
+      type: "string"
+      pattern: "^sha256:[a-f0-9]{64}$"
+      description: "SHA-256 calculado por el servidor; canonicalizacion versionada antes de I-05."
+    CreateTicketRequest:
+      type: "object"
+      required:
+        - "title"
+        - "description"
+      properties:
+        title:
+          type: "string"
+          minLength: 5
+          maxLength: 160
+        description:
+          type: "string"
+          minLength: 10
+          maxLength: 8000
+      additionalProperties: false
+    UpdateTicketRequest:
+      type: "object"
+      required:
+        - "expectedVersion"
+      properties:
+        expectedVersion:
+          type: "integer"
+          format: "int64"
+          minimum: 1
+        title:
+          type: "string"
+          minLength: 5
+          maxLength: 160
+        description:
+          type: "string"
+          minLength: 10
+          maxLength: 8000
+      additionalProperties: false
+      anyOf:
+        -
+          required:
+            - "title"
+        -
+          required:
+            - "description"
+      description: "Al menos titulo o descripcion. Cambiar contenido incrementa contentRevision, invalida la propuesta pendiente y vuelve a PENDING_AI. Un ticket cerrado exige reapertura."
+    VersionRequest:
+      type: "object"
+      required:
+        - "expectedVersion"
+      properties:
+        expectedVersion:
+          type: "integer"
+          format: "int64"
+          minimum: 1
+      additionalProperties: false
+    ReasonVersionRequest:
+      type: "object"
+      required:
+        - "expectedVersion"
+        - "reason"
+      properties:
+        expectedVersion:
+          type: "integer"
+          format: "int64"
+          minimum: 1
+        reason:
+          type: "string"
+          minLength: 3
+          maxLength: 1000
+      additionalProperties: false
+    DecisionRequest:
+      type: "object"
+      required:
+        - "decisionId"
+        - "proposalId"
+        - "proposalHash"
+        - "expectedVersion"
+        - "decision"
+        - "reason"
+      properties:
+        decisionId:
+          type: "string"
+          format: "uuid"
+        proposalId:
+          type: "string"
+          format: "uuid"
+        proposalHash:
+          $ref: "#/components/schemas/ProposalHash"
+        expectedVersion:
+          type: "integer"
+          format: "int64"
+          minimum: 1
+        decision:
+          type: "string"
+          enum:
+            - "APPROVE"
+            - "REJECT"
+        reason:
+          type: "string"
+          minLength: 3
+          maxLength: 1000
+      additionalProperties: false
+    TicketSnapshot:
+      type: "object"
+      required:
+        - "ticketId"
+        - "status"
+        - "aiStatus"
+        - "contentRevision"
+        - "version"
+      properties:
+        ticketId:
+          type: "string"
+          format: "uuid"
+        status:
+          $ref: "#/components/schemas/TicketStatus"
+        aiStatus:
+          $ref: "#/components/schemas/AiStatus"
+        contentRevision:
+          type: "integer"
+          minimum: 1
+        version:
+          type: "integer"
+          format: "int64"
+          minimum: 1
+    Reply:
+      type: "object"
+      required:
+        - "replyId"
+        - "proposalId"
+        - "approvalId"
+        - "text"
+        - "publishedAt"
+      properties:
+        replyId:
+          type: "string"
+          format: "uuid"
+        proposalId:
+          type: "string"
+          format: "uuid"
+        approvalId:
+          type: "string"
+          format: "uuid"
+        text:
+          type: "string"
+        publishedAt:
+          type: "string"
+          format: "date-time"
+          description: "Fecha UTC ISO-8601, terminada en Z."
+    Reference:
+      type: "object"
+      required:
+        - "documentId"
+        - "documentVersion"
+        - "sectionId"
+        - "chunkId"
+        - "contentHash"
+        - "excerpt"
+      properties:
+        documentId:
+          type: "string"
+          pattern: "^KB-[0-9]{3}$"
+        documentVersion:
+          type: "integer"
+          minimum: 1
+        sectionId:
+          type: "string"
+          minLength: 1
+        chunkId:
+          type: "string"
+          minLength: 1
+        contentHash:
+          $ref: "#/components/schemas/ProposalHash"
+        excerpt:
+          type: "string"
+          description: "Extracto corto del fragmento recuperado."
+    Proposal:
+      type: "object"
+      required:
+        - "proposalId"
+        - "ticketId"
+        - "contentRevision"
+        - "analysisId"
+        - "attempt"
+        - "category"
+        - "priority"
+        - "needsHumanInvestigation"
+        - "draftReply"
+        - "action"
+        - "proposalHash"
+        - "knowledgeVersion"
+        - "promptVersion"
+        - "model"
+        - "references"
+        - "createdAt"
+        - "expiresAt"
+      properties:
+        proposalId:
+          type: "string"
+          format: "uuid"
+        ticketId:
+          type: "string"
+          format: "uuid"
+        contentRevision:
+          type: "integer"
+          minimum: 1
+        analysisId:
+          type: "string"
+          format: "uuid"
+        attempt:
+          type: "integer"
+          minimum: 1
+        category:
+          $ref: "#/components/schemas/Category"
+        priority:
+          $ref: "#/components/schemas/Priority"
+        needsHumanInvestigation:
+          type: "boolean"
+        draftReply:
+          type: "string"
+        action:
+          $ref: "#/components/schemas/Action"
+        proposalHash:
+          $ref: "#/components/schemas/ProposalHash"
+        knowledgeVersion:
+          type: "string"
+        promptVersion:
+          type: "string"
+        model:
+          type: "string"
+        references:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Reference"
+        createdAt:
+          type: "string"
+          format: "date-time"
+          description: "Fecha UTC ISO-8601, terminada en Z."
+        expiresAt:
+          type: "string"
+          format: "date-time"
+          description: "Fecha UTC ISO-8601, terminada en Z."
+    HistoryEntry:
+      type: "object"
+      required:
+        - "sequence"
+        - "actor"
+        - "event"
+        - "previousStatus"
+        - "newStatus"
+        - "correlationId"
+        - "occurredAt"
+      properties:
+        sequence:
+          type: "integer"
+          format: "int64"
+          minimum: 1
+        actor:
+          type: "string"
+          description: "Identidad obtenida del contexto autenticado, nunca de un campo de entrada libre."
+        event:
+          type: "string"
+        previousStatus:
+          type: "string"
+          nullable: true
+          enum:
+            - "PENDING_AI"
+            - "AWAITING_APPROVAL"
+            - "MANUAL_REVIEW"
+            - "RESOLVED"
+            - "CLOSED"
+            - null
+          description: "Nulo exclusivamente para la creacion inicial."
+        newStatus:
+          $ref: "#/components/schemas/TicketStatus"
+        correlationId:
+          type: "string"
+          format: "uuid"
+        occurredAt:
+          type: "string"
+          format: "date-time"
+          description: "Fecha UTC ISO-8601, terminada en Z."
+    DecisionResult:
+      type: "object"
+      required:
+        - "decisionId"
+        - "proposalId"
+        - "decision"
+        - "actor"
+        - "reason"
+        - "decidedAt"
+        - "ticket"
+      properties:
+        decisionId:
+          type: "string"
+          format: "uuid"
+        proposalId:
+          type: "string"
+          format: "uuid"
+        decision:
+          type: "string"
+          enum:
+            - "APPROVE"
+            - "REJECT"
+        actor:
+          type: "string"
+        reason:
+          type: "string"
+          minLength: 3
+          maxLength: 1000
+        decidedAt:
+          type: "string"
+          format: "date-time"
+          description: "Fecha UTC ISO-8601, terminada en Z."
+        ticket:
+          $ref: "#/components/schemas/TicketSnapshot"
+        reply:
+          $ref: "#/components/schemas/Reply"
+      description: "APPROVE devuelve la respuesta publicada; REJECT omite reply. Un replay identico devuelve el resultado previamente confirmado."
+    KnowledgeDocument:
+      type: "object"
+      required:
+        - "documentId"
+        - "version"
+        - "knowledgeVersion"
+        - "title"
+        - "date"
+        - "language"
+        - "content"
+        - "contentHash"
+      properties:
+        documentId:
+          type: "string"
+          pattern: "^KB-[0-9]{3}$"
+        version:
+          type: "integer"
+          minimum: 1
+        knowledgeVersion:
+          type: "string"
+        title:
+          type: "string"
+        date:
+          type: "string"
+          format: "date"
+        language:
+          type: "string"
+          enum:
+            - "es"
+        content:
+          type: "string"
+          description: "Markdown de la version inmutable."
+        contentHash:
+          $ref: "#/components/schemas/ProposalHash"
+    Problem:
+      type: "object"
+      required:
+        - "type"
+        - "title"
+        - "status"
+        - "code"
+        - "correlationId"
+      properties:
+        type:
+          type: "string"
+          format: "uri"
+          example: "about:blank"
+        title:
+          type: "string"
+        status:
+          type: "integer"
+          minimum: 400
+          maximum: 599
+        detail:
+          type: "string"
+        instance:
+          type: "string"
+          format: "uri-reference"
+        code:
+          type: "string"
+        ticketId:
+          type: "string"
+          format: "uuid"
+        correlationId:
+          type: "string"
+          format: "uuid"
+      description: "Problem Details. ticketId se omite cuando no existe un ticket confirmado; detail no revela secretos."
+    Ticket:
+      allOf:
+        -
+          $ref: "#/components/schemas/TicketSnapshot"
+        -
+          type: "object"
+          required:
+            - "title"
+            - "description"
+            - "createdAt"
+            - "updatedAt"
+            - "replies"
+          properties:
+            title:
+              type: "string"
+            description:
+              type: "string"
+            category:
+              $ref: "#/components/schemas/Category"
+            priority:
+              $ref: "#/components/schemas/Priority"
+            createdAt:
+              type: "string"
+              format: "date-time"
+              description: "Fecha UTC ISO-8601, terminada en Z."
+            updatedAt:
+              type: "string"
+              format: "date-time"
+              description: "Fecha UTC ISO-8601, terminada en Z."
+            replies:
+              type: "array"
+              items:
+                $ref: "#/components/schemas/Reply"
+      description: "category y priority se omiten hasta clasificarse. replies conserva publicaciones anteriores al editar o reabrir."
+    TicketPage:
+      type: "object"
+      required:
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+        - "totalPages"
+      properties:
+        items:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Ticket"
+        page:
+          type: "integer"
+          minimum: 0
+        size:
+          type: "integer"
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: "integer"
+          format: "int64"
+          minimum: 0
+        totalPages:
+          type: "integer"
+          minimum: 0
+    HistoryPage:
+      type: "object"
+      required:
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+        - "totalPages"
+      properties:
+        items:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/HistoryEntry"
+        page:
+          type: "integer"
+          minimum: 0
+        size:
+          type: "integer"
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: "integer"
+          format: "int64"
+          minimum: 0
+        totalPages:
+          type: "integer"
+          minimum: 0
+    ProposalPage:
+      type: "object"
+      required:
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+        - "totalPages"
+      properties:
+        items:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Proposal"
+        page:
+          type: "integer"
+          minimum: 0
+        size:
+          type: "integer"
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: "integer"
+          format: "int64"
+          minimum: 0
+        totalPages:
+          type: "integer"
+          minimum: 0
