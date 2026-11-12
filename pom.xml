@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- POM padre: agrupa los servicios y centraliza compilacion y pruebas. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.supporthub</groupId>
+    <artifactId>supporthub</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <!-- Cada servicio mantiene su artefacto; no hay dependencia entre ellos. -->
+    <modules>
+        <module>services/ticket-service</module>
+        <module>services/ai-service</module>
+    </modules>
+
+    <properties>
+        <!-- release limita tanto el bytecode como las APIs disponibles a Java 21. -->
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <junit.version>5.13.4</junit.version>
+    </properties>
+
+    <!-- El BOM alinea todos los componentes de JUnit con una misma version. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <!-- Fija el copiado de recursos para no depender de defaults de Maven. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.4.0</version>
+            </plugin>
+            <!-- Compila fuentes y pruebas utilizando la configuracion Java 21. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.14.1</version>
+            </plugin>
+            <!-- Descubre y ejecuta pruebas JUnit durante mvn test/verify. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
+            </plugin>
+            <!-- Empaqueta cada modulo como JAR de biblioteca; aun no son aplicaciones. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>

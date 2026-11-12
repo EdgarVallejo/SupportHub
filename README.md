@@ -6,8 +6,9 @@ antes de publicarlas en el historial interno del ticket.
 
 ## Estado
 
-Estructura inicial del proyecto. I-00 (contratos y entorno base) esta pendiente
-de implementacion; los servicios y la infraestructura aun no estan configurados.
+I-00 esta en progreso. La tarea I-00-01 incorpora la base Maven de los dos servicios
+y el contrato de transiciones de estados, con pruebas unitarias JUnit.
+Los servicios aun no tienen API ni procesamiento IA; falta configurar la infraestructura.
 
 La especificacion del proyecto esta en [docs/specs/supporthub.md](docs/specs/supporthub.md).
 
@@ -31,7 +32,23 @@ workflows/n8n/       Flujo de aprobacion humana
 
 Java 21, Maven y Docker Desktop con el motor Linux mediante WSL 2 en Windows.
 El modo inicial de IA sera simulado (`stub`), sin credenciales de pago.
-Los comandos de compilacion y arranque se agregaran durante I-00.
+
+Desde la raiz del repositorio, compila y ejecuta las pruebas con:
+
+```powershell
+mvn -B verify
+```
+
+Para ejecutar solo las pruebas de tickets y construir sus dependencias locales:
+
+```powershell
+mvn -B -pl services/ticket-service -am test
+```
+
+La primera ejecucion descarga dependencias de Maven Central. Los informes JUnit
+quedan en `services/ticket-service/target/surefire-reports/`, excluidos de Git.
+`ai-service` es por ahora un modulo reservado y no contiene pruebas ni codigo ejecutable.
+El backlog se encuentra en [docs/backlog.md](docs/backlog.md).
 
 El script `scripts/setup/install-wsl.ps1` es una utilidad opcional para Windows;
 requiere permisos de administrador y puede requerir reiniciar el equipo.
